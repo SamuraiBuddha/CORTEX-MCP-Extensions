@@ -1,115 +1,169 @@
 # 🔌 CORTEX MCP Extensions
 
-Custom MCP (Model Context Protocol) servers tailored for CORTEX AI Orchestrator workflows. These extensions provide seamless integration between Claude and the CORTEX stack components.
+Custom MCP (Model Context Protocol) servers that provide Claude with direct access to CORTEX infrastructure. These extensions enable Claude to interact with services, trigger workflows, and monitor the CORTEX ecosystem.
 
-## 🎯 Purpose
+## 🎯 Purpose & Clarification
 
-This repository contains MCP servers specifically designed to enhance CORTEX functionality:
-- Direct integration with n8n workflows
-- Unified monitoring across all services
-- AI model routing and load balancing
-- Missing service integrations (Flowise, Loki, etc.)
-- Multi-machine orchestration
+**What this repository IS:**
+- MCP servers that give Claude direct access to CORTEX services
+- Tools deployed to Terramaster NAS for centralized Claude memory
+- Single-point integration for all Claude instances across Magi machines
+- Complementary to (not replacement for) n8n orchestration
+
+**What this repository is NOT:**
+- Not the main orchestration system (that's CORTEX-AI-Orchestrator-v2)
+- Not limited to single-machine use (deployed centrally on NAS)
+- Not a replacement for n8n workflows
+
+## 🏗️ Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   Terramaster NAS                           │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │           CORTEX MCP Extensions (This Repo)         │  │
+│  │                                                     │  │
+│  │  • cortex-orchestrator-mcp (trigger n8n workflows) │  │
+│  │  • cortex-monitoring-mcp (unified metrics)         │  │
+│  │  • flowise-mcp (AI flow management)                │  │
+│  │  • cortex-ai-router (model selection)              │  │
+│  │  • cortex-stack-manager (Docker management)        │  │
+│  └──────────────────┬──────────────────────────────────┘  │
+│                     │ MCP Protocol                          │
+└─────────────────────┼───────────────────────────────────────┘
+                      │
+     ┌────────────────┴────────────────┬─────────────────────┐
+     │                                 │                     │
+┌────┴─────┐                    ┌─────┴────┐         ┌──────┴───┐
+│ Claude   │                    │ Claude   │         │ Claude   │
+│Desktop   │                    │Desktop   │         │Desktop   │
+│Melchior  │                    │Balthasar │         │ Caspar   │
+└──────────┘                    └──────────┘         └──────────┘
+```
 
 ## 📦 Available MCP Servers
 
 ### 🚧 In Development
 
 #### **cortex-orchestrator**
-- Direct n8n workflow management
-- Pipeline execution (CAD, Code, Research, Data)
-- Cross-machine task distribution
-- Workflow status monitoring
+- **Purpose**: Allow Claude to trigger n8n workflows
+- **NOT**: An n8n replacement or workflow engine
+- **Features**:
+  - List available n8n workflows
+  - Trigger workflow execution
+  - Monitor workflow status
+  - Pass parameters to workflows
+- **Use Case**: "Claude, run the CAD processing pipeline for this file"
 
 #### **cortex-monitoring**
-- Unified metrics from Prometheus, InfluxDB, Grafana
-- Custom alert aggregation
-- Service health monitoring
-- Performance analytics
+- **Purpose**: Unified view of all CORTEX services
+- **Features**:
+  - Aggregate metrics from Prometheus, InfluxDB, Grafana
+  - Service health checks across all Magi machines
+  - Alert summaries and performance analytics
+  - Resource usage tracking
 
 #### **flowise-mcp**
-- Flowise flow management
-- AI chain execution
-- Model configuration
-- Flow monitoring
+- **Purpose**: Fill the gap (no official Flowise MCP exists)
+- **Features**:
+  - Manage Flowise AI flows
+  - Execute chains with parameters
+  - Monitor flow execution
+  - Update model configurations
 
 #### **cortex-ai-router**
-- Intelligent model selection
-- Load balancing across GPUs
-- Performance tracking
-- Cost optimization
+- **Purpose**: Intelligent model selection and routing
+- **Features**:
+  - Route requests to appropriate AI models
+  - Load balance across Magi GPUs
+  - Track model performance and costs
+  - Optimize for latency vs quality
 
 #### **cortex-stack-manager**
-- Docker stack management
-- Service deployment
-- Health checks
-- Resource monitoring
+- **Purpose**: Docker stack administration
+- **Features**:
+  - Start/stop services across machines
+  - Deploy stack updates
+  - Monitor resource usage
+  - Health check automation
 
-## 🚀 Quick Start
+## 🚀 Deployment Strategy
 
-### Installation
+### Production Deployment (Terramaster NAS)
 
-1. Clone this repository:
+1. **Clone to NAS**:
 ```bash
+ssh admin@terramaster.local
+cd /volume1/docker
 git clone https://github.com/SamuraiBuddha/CORTEX-MCP-Extensions.git
 cd CORTEX-MCP-Extensions
 ```
 
-2. Install dependencies:
+2. **Build and Deploy**:
 ```bash
-# For TypeScript servers
-cd servers/cortex-orchestrator
-npm install
+# Build all servers
+docker-compose build
 
-# For Python servers
-cd servers/flowise-mcp
-pip install -r requirements.txt
+# Deploy as services
+docker-compose up -d
 ```
 
-### Usage with Claude Desktop
-
-Add to your Claude Desktop configuration (`config.json`):
-
+3. **Configure Claude Desktop on Each Magi**:
 ```json
 {
   "mcpServers": {
     "cortex-orchestrator": {
-      "command": "node",
-      "args": ["./servers/cortex-orchestrator/dist/index.js"],
+      "command": "ssh",
+      "args": ["admin@terramaster.local", 
+               "docker", "exec", "-i", "cortex-mcp-orchestrator", 
+               "node", "/app/dist/index.js"],
       "env": {
-        "N8N_HOST": "http://localhost:5678",
+        "N8N_HOST": "http://terramaster.local:5678",
         "N8N_API_KEY": "${N8N_API_KEY}"
       }
     },
-    "flowise-mcp": {
-      "command": "python",
-      "args": ["-m", "flowise_mcp_server"],
+    "cortex-monitoring": {
+      "command": "ssh",
+      "args": ["admin@terramaster.local", 
+               "docker", "exec", "-i", "cortex-mcp-monitoring", 
+               "python", "-m", "cortex_monitoring"],
       "env": {
-        "FLOWISE_HOST": "http://localhost:3001",
-        "FLOWISE_API_KEY": "${FLOWISE_API_KEY}"
+        "PROMETHEUS_HOST": "http://terramaster.local:9090",
+        "INFLUX_HOST": "http://melchior.local:8086",
+        "GRAFANA_HOST": "http://terramaster.local:3000"
       }
     }
   }
 }
 ```
 
-## 🏗️ Architecture
+### Development Setup (Local)
+
+Follow the original Quick Start instructions for local development.
+
+## 🔗 Relationship to CORTEX Ecosystem
+
+1. **CORTEX-AI-Orchestrator-v2**: The main project using n8n for multi-machine orchestration
+2. **CORTEX-MCP-Extensions** (This repo): MCP servers giving Claude access to trigger and monitor orchestration
+3. **Magi-Windows-Deployments**: Configures the Windows machines where Claude Desktop runs
+4. **homelab-infrastructure**: Defines the hardware where everything runs
+
+### How They Work Together
 
 ```
-CORTEX-MCP-Extensions/
-├── servers/                      # MCP server implementations
-│   ├── cortex-orchestrator/      # n8n workflow management
-│   ├── cortex-monitoring/        # Unified monitoring
-│   ├── cortex-ai-router/         # AI model routing
-│   ├── flowise-mcp/              # Flowise integration
-│   └── cortex-stack-manager/     # Docker stack management
-├── shared/                       # Shared utilities
-│   ├── cortex-utils/             # Common functions
-│   └── types/                    # TypeScript types
-├── examples/                     # Usage examples
-├── docs/                         # Documentation
-└── tests/                        # Test suites
+User → Claude Desktop → MCP Extensions (on NAS) → n8n Workflows → Magi Machines
+                           ↓
+                   Unified Memory/State
+                      (on NAS)
 ```
+
+## 📋 Key Differences from Standard MCPs
+
+1. **Centralized Deployment**: All MCP servers run on NAS, not locally
+2. **Unified State**: Single knowledge graph shared across all Claude instances
+3. **Multi-Machine Aware**: Can trigger workflows on any Magi machine
+4. **Persistent Memory**: Survives Claude Desktop restarts
 
 ## 🔧 Development
 
@@ -120,9 +174,9 @@ CORTEX-MCP-Extensions/
 ./scripts/create-server.sh my-server-name
 ```
 
-2. Implement your server following MCP protocol
-3. Add tests
-4. Update documentation
+2. Consider NAS deployment from the start
+3. Use shared state from Neo4j/Redis on NAS
+4. Test multi-machine scenarios
 
 ### Testing
 
@@ -140,14 +194,15 @@ npm test servers/cortex-orchestrator
 # Build all TypeScript servers
 npm run build
 
-# Build specific server
-cd servers/cortex-orchestrator && npm run build
+# Build for Docker deployment
+docker-compose build
 ```
 
 ## 📚 Documentation
 
 - [MCP Server Development Guide](docs/development-guide.md)
 - [CORTEX Integration Guide](docs/cortex-integration.md)
+- [NAS Deployment Guide](docs/nas-deployment.md)
 - [API Reference](docs/api-reference.md)
 - [Examples](examples/README.md)
 
@@ -156,18 +211,19 @@ cd servers/cortex-orchestrator && npm run build
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ### Priority Areas
-1. Completing cortex-orchestrator for n8n integration
-2. Building flowise-mcp server
+1. Completing cortex-orchestrator for n8n workflow triggering
+2. Building flowise-mcp server  
 3. Creating monitoring aggregation tools
-4. Improving multi-machine coordination
+4. Implementing NAS deployment scripts
 
 ## 🔗 Related Projects
 
-- [CORTEX-AI-Orchestrator-v2](https://github.com/SamuraiBuddha/CORTEX-AI-Orchestrator-v2) - Main CORTEX project
+- [CORTEX-AI-Orchestrator-v2](https://github.com/SamuraiBuddha/CORTEX-AI-Orchestrator-v2) - Main CORTEX orchestration project
 - [Model Context Protocol](https://modelcontextprotocol.io/) - MCP documentation
 - [Docker MCP Servers](https://github.com/docker/mcp-servers) - Official MCP servers
+- [Docker MCP Toolkit](https://docs.docker.com/desktop/extensions/marketplace/docker-mcp-toolkit/) - Easy MCP deployment
 
-## 📝 License
+## 📄 License
 
 This project is licensed under the MIT License - see [LICENSE](LICENSE) file.
 
